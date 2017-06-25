@@ -24,7 +24,6 @@
  */
 
 /// TIMER ///
-
 volatile uint32_t timer_ovf_count = 0;
 void timer_init() {
 	// enable ovf interrupt
@@ -61,12 +60,13 @@ void rx_init(void) {
 
 	// Enable Interrupts on RX Pins
 	PCMSK0 |= (1 << PCINT0);
-	PCMSK2 |= (1 << PCINT18) | (1 << PCINT20) | (1 << PCINT21) | (1 << PCINT22) | (1 << PCINT23);
-	PCICR  |= (1 << PCIE0)   | (1 << PCIE2);
+	PCMSK2 |= (1 << PCINT18) | (1 << PCINT20) | (1 << PCINT21) | (1 << PCINT22)
+			| (1 << PCINT23);
+	PCICR |= (1 << PCIE0) | (1 << PCIE2);
 }
 
-uint32_t rxValues[6] = {3000, 3000, 3000, 3000, 3000, 3000};    //
-uint32_t lastTime[6] = {0, 0, 0, 0, 0, 0};						// Last Time Edge Change was detected for RX Pins
+uint32_t rxValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };    //
+uint32_t lastTime[6] = { 0, 0, 0, 0, 0, 0 }; // Last Time Edge Change was detected for RX Pins
 
 // High Priority Control
 volatile uint8_t last_pinb_state = PINB;
@@ -91,57 +91,56 @@ ISR(PCINT2_vect) {
 	/* execute by pin */
 	if (mask & (1 << 2)) {
 		diffTime = currentTime - lastTime[0];
-		if (!(pins_state & (1 << 2))) {						// negedge on this pin
-			if (diffTime > 1500 && diffTime < 4200) {		// filter only 'good' values
+		if (!(pins_state & (1 << 2))) {					// negedge on this pin
+			if (diffTime > 1500 && diffTime < 4200) {// filter only 'good' values
 				rxValues[0] = diffTime;
 			}
-		} else {											// posedge on this pin
+		} else {										// posedge on this pin
 			lastTime[0] = currentTime;
 		}
 	}
 
 	if (mask & (1 << 4)) {
 		diffTime = currentTime - lastTime[1];
-		if (!(pins_state & (1 << 4))) {						// negedge on this pin
-			if (diffTime > 1500 && diffTime < 4200) {		// filter only 'good' values
+		if (!(pins_state & (1 << 4))) {					// negedge on this pin
+			if (diffTime > 1500 && diffTime < 4200) {// filter only 'good' values
 				rxValues[1] = diffTime;
 			}
-		} else {											// posedge on this pin
+		} else {										// posedge on this pin
 			lastTime[1] = currentTime;
 		}
 	}
 
 	if (mask & (1 << 5)) {
 		diffTime = currentTime - lastTime[2];
-		if (!(pins_state & (1 << 5))) {						// negedge on this pin
-			if (diffTime > 1500 && diffTime < 4200) {		// filter only 'good' values
+		if (!(pins_state & (1 << 5))) {					// negedge on this pin
+			if (diffTime > 1500 && diffTime < 4200) {// filter only 'good' values
 				rxValues[2] = diffTime;
 			}
-		} else {											// posedge on this pin
+		} else {										// posedge on this pin
 			lastTime[2] = currentTime;
 		}
 	}
 
 	if (mask & (1 << 6)) {
 		diffTime = currentTime - lastTime[3];
-		if (!(pins_state & (1 << 6))) {						// negedge on this pin
-			if (diffTime > 1500 && diffTime < 4200) {		// filter only 'good' values
+		if (!(pins_state & (1 << 6))) {					// negedge on this pin
+			if (diffTime > 1500 && diffTime < 4200) {// filter only 'good' values
 				rxValues[3] = diffTime;
 			}
-		} else {											// posedge on this pin
+		} else {										// posedge on this pin
 			lastTime[3] = currentTime;
 		}
 	}
-
 
 }
 //////////////////////////////////////////////////////////////////////////////////
 
 //// PWM ////
-#define PWM_MIN_INPUT 1500UL
-#define PWM_MAX_INPUT 4200UL
-#define PWM_MIN_OUTPUT 170UL
-#define PWM_MAX_OUTPUT 250UL
+#define PWM_MIN_INPUT 2000UL
+#define PWM_MAX_INPUT 4000UL
+#define PWM_MIN_OUTPUT 28UL
+#define PWM_MAX_OUTPUT 74UL
 
 void pwm_init() {
 	// pinMode(11, 3, 10, 9 -> OUTPUT)
@@ -154,9 +153,17 @@ void pwm_init() {
 	// Set Timer 2 as Phase-corrected PWM 8-bit non-inverting
 	TCCR2A |= (1 << COM2A1) | (1 << COM2B1) | (1 << WGM20);
 
+	// Start Clocks Prescale/8
+//	TCCR1B |= (1 << CS11);
+//	TCCR2B |= (1 << CS21);
+
 	// Start Clocks Prescale/64
-	TCCR1B |= (1 << CS10) | (1 << CS11);
-	TCCR2B |= (1 << CS22);
+//	TCCR1B |= (1 << CS10) | (1 << CS11);
+//	TCCR2B |= (1 << CS22);
+
+	// Start Clocks Prescale/256
+	TCCR1B |= (1 << CS12);
+	TCCR2B |= (1 << CS22) | (1 << CS21);
 
 	// Enable Interrupts
 //	TIMSK1 |= (1 << TOIE);
@@ -164,10 +171,14 @@ void pwm_init() {
 }
 
 void pwm_update() {
-	OCR1A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
-	OCR1B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
-	OCR2A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
-	OCR2B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
+	OCR1A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT,
+	PWM_MAX_OUTPUT);
+	OCR1B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT,
+	PWM_MAX_OUTPUT);
+	OCR2A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT,
+	PWM_MAX_OUTPUT);
+	OCR2B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT,
+	PWM_MAX_OUTPUT);
 	println();
 	print("> PWM_VALUES:[");
 	print(OCR1A, 10);
@@ -181,7 +192,6 @@ void pwm_update() {
 }
 
 /////////////////////////////////////////////////////////////////////////////////
-
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -245,7 +255,6 @@ int main(void) {
 		compass_data = i2c::cmps::read();
 		baro_data = i2c::baro::read();
 
-
 		// Calculate current orientation
 //		_gyro_imm[0] += motion_data.gyro_x * LOOPTIME_US / 1000000;		// Add angle change [deg/s] to immediate.
 //		_gyro_imm[1] += motion_data.gyro_y * LOOPTIME_US / 1000000;
@@ -287,8 +296,6 @@ int main(void) {
 //		print(i2c::ga::convertFromRawGyro(currentOrientation[2]));
 //		print("deg]");
 
-
-
 		println();
 		print("> RX_VALUES:[");
 		print(rxValues[0]);
@@ -307,6 +314,5 @@ int main(void) {
 		println();
 	}
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////
