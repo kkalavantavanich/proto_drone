@@ -9,6 +9,7 @@
 #include <math.h>
 #include <util/delay.h>
 
+#include "def.h"
 #include "I2C.h"
 #include "USART.h"
 #include "Utils.h"
@@ -178,11 +179,11 @@ void printData(mpu6050_t data) {
 	print("deg/s, GYR_Z = ");
 	print(ga::convertFromRawGyro(data.gyro_z));
 	print("deg/s,\t ANG_X = ");
-	print(ga::convertFromRawGyro(data.ang_x));
+	print(data.ang_x);
 	print("deg, ANG_Y = ");
-	print(ga::convertFromRawGyro(data.ang_y));
+	print(data.ang_y);
 	print("deg, ANG_Z = ");
-	print(ga::convertFromRawGyro(data.ang_z));
+	print(data.ang_z);
 	print("deg.");
 }
 
@@ -365,7 +366,7 @@ void calibrate() {
 	mpu6050_t buf;
 	int32_t motion_buffers[6] = { 0, 0, 0, 0, 0, 0 };
 	for (int i = 0; i < (1 << (I2C_ACC_CALIBRATION_SCALE + 1)); i++) {
-		buf = read();
+		buf = _read();
 
 		// Dismissed first half and use only second half.
 		if (i >= (1 << I2C_ACC_CALIBRATION_SCALE)) {
@@ -376,7 +377,7 @@ void calibrate() {
 			motion_buffers[4] += buf.gyro_y;
 			motion_buffers[5] += buf.gyro_z;
 		}
-		_delay_us(200);
+		_delay_us(400);
 	}
 
 	for (int i = 0; i < 6; i++) {
@@ -386,7 +387,8 @@ void calibrate() {
 	calibration_params[2] += 4096; // for acc_z => value must +1.00g
 }
 
-mpu6050_t read() {
+/* Angle will not be calculated */
+mpu6050_t _read() {
 	mpu6050_t buf;
 	_start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
 	_send_byte(MPU6050_START_REG_ADDR);
@@ -401,17 +403,16 @@ mpu6050_t read() {
 	buf.gyro_z = _read_word(false) + calibration_params[5];
 
 	_stop();
-	_calculate_angle(buf);
 	return buf;
 }
 
 #define I2C_GA_SMOOTHNESS_SCALE 3 // How much values (smoothness) to use for calculation (in powers of 2 -- 5 => 32).
-
+double acc_ang_x_deg = 0, acc_ang_y_deg = 0, acc_ang_z_deg = 0;
 mpu6050_t read_smooth() {
 	mpu6050_t imm;
-	int32_t buffers[7] = { 0, 0, 0, 0, 0, 0, 0 };// Buffer used to sum and find average of read values
+	int32_t buffers[7] = { 0, 0, 0, 0, 0, 0, 0 }; // Buffer used to sum and find average of _read values
 	for (int i = 0; i < (1 << I2C_GA_SMOOTHNESS_SCALE); i++) {
-		imm = read();
+		imm = _read();
 		buffers[0] += imm.acc_x;
 		buffers[1] += imm.acc_y;
 		buffers[2] += imm.acc_z;
@@ -429,23 +430,35 @@ mpu6050_t read_smooth() {
 	imm.gyro_z = buffers[5] >> I2C_GA_SMOOTHNESS_SCALE;
 	imm.temperature = buffers[6] >> I2C_GA_SMOOTHNESS_SCALE;
 	_calculate_angle(imm);
+#ifdef DEBUG
+	print("> imm.ang_x=");
+	print(imm.ang_x);
+	print(", imm.ang_y=");
+	print(imm.ang_y);
+
+	println();
+#endif
 	return imm;
 }
 
-const double PI = (3.14159265358979);
-const double RAD_TO_DEG = (180 / PI);
-#define ANGLE_MIN_IN -32768
-#define ANGLE_MAX_IN 32767
-#define ANGLE_MIN_OUT -90
-#define ANGLE_MAX_OUT 90
-
-void _calculate_angle(mpu6050_t data) {
-	int x_mapped = map(data.acc_x, -32768, 32767, -90, 90);
-	int y_mapped = map(data.acc_y, -32768, 32767, -90, 90);
-	int z_mapped = map(data.acc_z, -32768, 32767, -90, 90);
-	data.ang_x = RAD_TO_DEG * (atan2(-y_mapped, -z_mapped) + PI);
-	data.ang_y = RAD_TO_DEG * (atan2(-x_mapped, -z_mapped) + PI);
-	data.ang_z = RAD_TO_DEG * (atan2(-y_mapped, -x_mapped) + PI);
+void _calculate_angle(mpu6050_t &data) {
+	acc_ang_x_deg += convertFromRawGyro(data.gyro_x) * DELTA_TIME_US / 1000000.0;
+	acc_ang_y_deg += convertFromRawGyro(data.gyro_y) * DELTA_TIME_US / 1000000.0;
+	acc_ang_z_deg += convertFromRawGyro(data.gyro_z) * DELTA_TIME_US / 1000000.0;
+	data.ang_x = acc_ang_x_deg;
+	data.ang_y = acc_ang_y_deg;
+	data.ang_z = acc_ang_z_deg;
+#ifdef DEBUG
+	print("> acc_ang_x=");
+	print(acc_ang_x_deg);
+	print(", acc_ang_y=");
+	print(acc_ang_y_deg);
+	print(", acc_ang_z=");
+	print(acc_ang_z_deg);
+	print(", data.ang_x=");
+	print(data.ang_x);
+	println();
+#endif
 }
 
 } /* namespace ga */
@@ -537,7 +550,7 @@ void _update_calibration_param() {
 long get_utemp() {
 	int16_t buffer;
 
-	// Set mode to 'read temperature'
+	// Set mode to '_read temperature'
 	_start(I2C_ADDR_BARO, I2C_WRITE);
 	_send_byte(0xF4);
 	_send_byte(0x2E);
@@ -560,7 +573,7 @@ long get_upres() {
 	long buffer;
 	long upper, middle, lower;
 
-	// Set mode to 'read pressure'
+	// Set mode to '_read pressure'
 	_start(I2C_ADDR_BARO, I2C_WRITE);
 	_send_byte(0xF4);
 	_send_byte(0x34 | (OSS << 6));

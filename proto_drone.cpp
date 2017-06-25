@@ -2,11 +2,10 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+#include "def.h"    // Definitions
 #include "USART.h"  // Print
 #include "I2C.h" 	// Sensors
 #include "Utils.h"  // Utility functions
-
-//#define DEBUG
 
 /* ==== RX Pins ====
  * PIN2 (D2) = PCINT18 (PCMSK2) = RX 0 - Throttle
@@ -23,7 +22,6 @@
  * PIN10 (B2) = Motor 3 = OC1B
  * PIN9  (B1) = Motor 4 = OC1A
  */
-#define LOOPTIME_US 500000
 
 /// TIMER ///
 
@@ -170,7 +168,8 @@ void pwm_update() {
 	OCR1B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
 	OCR2A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
 	OCR2B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
-	print(">> ");
+	println();
+	print("> PWM_VALUES:[");
 	print(OCR1A, 10);
 	print(", ");
 	print(OCR1B, 10);
@@ -178,7 +177,7 @@ void pwm_update() {
 	print(OCR2A, 10);
 	print(", ");
 	print(OCR2B, 10);
-	println();
+	print("]");
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -207,6 +206,7 @@ int main(void) {
 
 	// timer init
 	timer_init();
+	long time = kronos();
 
 	// global variables in main loop //
 	int i = 0;											// loop index
@@ -230,6 +230,7 @@ int main(void) {
 
 	///////////////////////// MAIN LOOP ///////////////////////////
 	while (true) {
+		time = kronos();
 		// Console Number
 		print(++i);
 		print(" >> ");
@@ -288,18 +289,21 @@ int main(void) {
 
 
 
-//		println();
-//		print(">> ");
-//		print(rxValues[0]);
-//		print(", ");
-//		print(rxValues[1]);
-//		print(", ");
-//		print(rxValues[2]);
-//		print(", ");
-//		print(rxValues[3]);
+		println();
+		print("> RX_VALUES:[");
+		print(rxValues[0]);
+		print(", ");
+		print(rxValues[1]);
+		print(", ");
+		print(rxValues[2]);
+		print(", ");
+		print(rxValues[3]);
+		print("]");
 
 		pwm_update();
-		_delay_ms(1000);
+		print("\n> time used=");
+		print(kronos() - time);
+		_delay_us(LOOPTIME_US);
 		println();
 	}
 }
