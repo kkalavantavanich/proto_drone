@@ -4,6 +4,7 @@
 
 #include "USART.h"  // Print
 #include "I2C.h" 	// Sensors
+#include "Utils.h"  // Utility functions
 
 //#define DEBUG
 
@@ -89,6 +90,7 @@ ISR(PCINT2_vect) {
 
 	sei();
 
+	/* execute by pin */
 	if (mask & (1 << 2)) {
 		diffTime = currentTime - lastTime[0];
 		if (!(pins_state & (1 << 2))) {						// negedge on this pin
@@ -143,9 +145,6 @@ ISR(PCINT2_vect) {
 #define PWM_MIN_OUTPUT 170UL
 #define PWM_MAX_OUTPUT 250UL
 
-#define RANGE_INPUT (PWM_MAX_INPUT - PWM_MIN_INPUT)
-#define RANGE_OUTPUT (PWM_MAX_OUTPUT - PWM_MIN_OUTPUT)
-
 void pwm_init() {
 	// pinMode(11, 3, 10, 9 -> OUTPUT)
 	DDRD |= (1 << PORTD3);
@@ -167,10 +166,10 @@ void pwm_init() {
 }
 
 void pwm_update() {
-	OCR1A = (((rxValues[0] - PWM_MIN_INPUT) * RANGE_OUTPUT) / RANGE_INPUT) + PWM_MIN_OUTPUT;
-	OCR1B = (((rxValues[0] - PWM_MIN_INPUT) * RANGE_OUTPUT) / RANGE_INPUT) + PWM_MIN_OUTPUT;
-	OCR2A = (((rxValues[0] - PWM_MIN_INPUT) * RANGE_OUTPUT) / RANGE_INPUT) + PWM_MIN_OUTPUT;
-	OCR2B = (((rxValues[0] - PWM_MIN_INPUT) * RANGE_OUTPUT) / RANGE_INPUT) + PWM_MIN_OUTPUT;
+	OCR1A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
+	OCR1B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
+	OCR2A = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
+	OCR2B = map(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT, PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
 	print(">> ");
 	print(OCR1A, 10);
 	print(", ");
@@ -211,19 +210,19 @@ int main(void) {
 
 	// global variables in main loop //
 	int i = 0;											// loop index
-	uint8_t ext_pin_state = 0xFF;						// External Pin
+//	uint8_t ext_pin_state = 0xFF;						// External Pin
 
 	mpu6050_t motion_data;
 	hmc5883_t compass_data;
 	bmp085_t baro_data;
 
-	int16_t currentOrientation[3] = {0, 0, 0};			// Calculated from gyro data
-	int16_t _gyro_prev[3] = {0, 0, 0};					// previous gyro value
-	int16_t _gyro_imm[3] = {0, 0, 0};					// immediate gyro value
-
-	int16_t currentVelocity[3] = {0, 0, 0};				// Calculated from accelerometer
-	int16_t _acc_prev[3] = {0, 0, 0};
-	int16_t _acc_imm[3]  = {0, 0, 0};
+//	int16_t currentOrientation[3] = {0, 0, 0};			// Calculated from gyro data
+//	int16_t _gyro_prev[3] = {0, 0, 0};					// previous gyro value
+//	int16_t _gyro_imm[3] = {0, 0, 0};					// immediate gyro value
+//
+//	int16_t currentVelocity[3] = {0, 0, 0};				// Calculated from accelerometer
+//	int16_t _acc_prev[3] = {0, 0, 0};
+//	int16_t _acc_imm[3]  = {0, 0, 0};
 
 	sei();
 
@@ -274,10 +273,10 @@ int main(void) {
 
 //		 Print Data
 		i2c::printData(motion_data);
-		print(" ");
-		i2c::printData(compass_data);
-		print(" ");
-		i2c::printData(baro_data);
+//		print(" ");
+//		i2c::printData(compass_data);
+//		print(" ");
+//		i2c::printData(baro_data);
 //		print("   ");
 //		print("Orient.[");
 //		print(i2c::ga::convertFromRawGyro(currentOrientation[0]));

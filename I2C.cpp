@@ -11,28 +11,32 @@
 
 #include "I2C.h"
 #include "USART.h"
+#include "Utils.h"
 
 namespace i2c {
-
 
 /* I2C Private Elementary Functions */
 
 // Don't forget to I2C_initialize()
 void _start(uint8_t address, uint8_t mode) {
 	TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN); // Send Start Condition on Control Register (TWCR)
-	while (!(TWCR & (1<<TWINT))); // Wait for start
-	if ((TWSR & 0xF8) != I2C_ST_START && (TWSR & 0xF8) != I2C_ST_REP_START) _error("I2C_START_ERROR"); // Check Status Register (TWSR)
+	while (!(TWCR & (1 << TWINT)))
+		; // Wait for start
+	if ((TWSR & 0xF8) != I2C_ST_START && (TWSR & 0xF8) != I2C_ST_REP_START)
+		_error("I2C_START_ERROR"); // Check Status Register (TWSR)
 
 	TWDR = (address << 1) | mode; // loads address and mode
 	TWCR = (1 << TWINT) | (1 << TWEN); // Clear TWINT to start address transmission.
-	while (!(TWCR & (1<<TWINT))); // Wait for transmission.
+	while (!(TWCR & (1 << TWINT)))
+		; // Wait for transmission.
 
 	if ((TWSR & 0xF8) != (mode ? I2C_MR_ADDR_ACK : I2C_MT_ADDR_ACK)) {
 		if ((TWSR & 0xF8) == I2C_MR_ADDR_NACK) {
 			_error("I2C_MR_ADDRESS_NACK", address);
 		} else if ((TWSR & 0xF8) == I2C_MT_ADDR_NACK) {
 			_error("I2C_MT_ADDRESS_NACK", address);
-		} else _error();
+		} else
+			_error();
 	}
 }
 
@@ -41,14 +45,16 @@ void _stop() {
 }
 
 // Sends a byte. Must be called after I2C_start() in Master Transmitter (MT) mode.
-void _send_byte(uint8_t data){
+void _send_byte(uint8_t data) {
 	TWDR = data;
 	TWCR = (1 << TWINT) | (1 << TWEN);
-	while (!(TWCR & (1 << TWINT)));
+	while (!(TWCR & (1 << TWINT)))
+		;
 	if ((TWSR & 0xF8) != I2C_MT_DATA_ACK) {
 		if ((TWSR & 0xF8) == I2C_MT_DATA_NACK) {
 			_error("I2C_DATA_NACK");
-		} else _error();
+		} else
+			_error();
 	}
 }
 
@@ -59,7 +65,8 @@ uint8_t _read_byte(bool sendAck) {
 	} else {
 		TWCR = (1 << TWINT) | (1 << TWEN);
 	}
-	while (!(TWCR & (1 << TWINT)));
+	while (!(TWCR & (1 << TWINT)))
+		;
 	if ((TWSR & 0xF8) != I2C_MR_DATA_ACK && (TWSR & 0xF8) != I2C_MR_DATA_NACK) {
 		_error();
 	}
@@ -101,60 +108,60 @@ void check_addresses() {
 	_start(I2C_ADDR_BARO, I2C_WRITE);
 	_stop();
 
-    println("> Checking Compass...");
+	println("> Checking Compass...");
 	_start(I2C_ADDR_COMPASS, I2C_WRITE);
 	_send_byte(0x00);
-    _start(I2C_ADDR_COMPASS, I2C_READ);
-    buffer = _read_byte(true);
-    print("MA[1:0] = 0b");
-    println((buffer & 0x60) >> 5, 2);
-    print("DO[2:0] = 0b");
-    println((buffer & 0x1C) >> 2, 2);
-    print("MS[1:0] = 0b");
-    println(buffer & 0x03, 2);
-    buffer = _read_byte(true);
-    print("GN[2:0] = 0b");
-    println((buffer & 0xe0) >> 5, 2);
-    buffer = _read_byte(false);
-    print("HS = ");
-    println(buffer >> 7, 2);
-    print("MD[1:0] = 0b");
-    println((buffer & 0x03), 2);
-    _stop();
+	_start(I2C_ADDR_COMPASS, I2C_READ);
+	buffer = _read_byte(true);
+	print("MA[1:0] = 0b");
+	println((buffer & 0x60) >> 5, 2);
+	print("DO[2:0] = 0b");
+	println((buffer & 0x1C) >> 2, 2);
+	print("MS[1:0] = 0b");
+	println(buffer & 0x03, 2);
+	buffer = _read_byte(true);
+	print("GN[2:0] = 0b");
+	println((buffer & 0xe0) >> 5, 2);
+	buffer = _read_byte(false);
+	print("HS = ");
+	println(buffer >> 7, 2);
+	print("MD[1:0] = 0b");
+	println((buffer & 0x03), 2);
+	_stop();
 
-    println("> Checking EEPROM...");
-    _start(I2C_ADDR_EEPROM, I2C_WRITE);
-    _stop();
-    println("> Checking External Pin...");
-    _start(I2C_ADDR_EXT_PIN, I2C_WRITE);
-    _stop();
+	println("> Checking EEPROM...");
+	_start(I2C_ADDR_EEPROM, I2C_WRITE);
+	_stop();
+	println("> Checking External Pin...");
+	_start(I2C_ADDR_EXT_PIN, I2C_WRITE);
+	_stop();
 
-    println("> Checking Gyro & Accelerometer...");
-    _start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
-    _send_byte(0x1A);
-    _start(I2C_ADDR_GYRO_ACC, I2C_READ);
-    uint8_t dlpf = (_read_byte(true)) & 0x07;
-    print("DLPF = 0b");
-    println(dlpf, 2);
-    uint8_t fs_sel = ((_read_byte(true)) & 0x18) >> 3;
-    print("GYRO::FS_SEL = 0b");
-    println(fs_sel, 2);
-    uint8_t afs_sel = ((_read_byte(true)) & 0x18) >> 3;
-    print("ACC::AFS_SEL = 0b");
-    println(afs_sel, 2);
-    uint8_t fifo = (_read_byte(false));
-    print("FIFO_EN = 0b");
-    println(fifo, 2);
-    _start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
+	println("> Checking Gyro & Accelerometer...");
+	_start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
+	_send_byte(0x1A);
+	_start(I2C_ADDR_GYRO_ACC, I2C_READ);
+	uint8_t dlpf = (_read_byte(true)) & 0x07;
+	print("DLPF = 0b");
+	println(dlpf, 2);
+	uint8_t fs_sel = ((_read_byte(true)) & 0x18) >> 3;
+	print("GYRO::FS_SEL = 0b");
+	println(fs_sel, 2);
+	uint8_t afs_sel = ((_read_byte(true)) & 0x18) >> 3;
+	print("ACC::AFS_SEL = 0b");
+	println(afs_sel, 2);
+	uint8_t fifo = (_read_byte(false));
+	print("FIFO_EN = 0b");
+	println(fifo, 2);
+	_start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
 	_send_byte(0x6B);
 	_start(I2C_ADDR_GYRO_ACC, I2C_READ);
 	print("PWR_MGMT_1 = 0b");
 	println(_read_byte(true), 2);
 	print("PWR_MGMT_2 = 0b");
 	println(_read_byte(false), 2);
-    _stop();
+	_stop();
 
-    println("Finished checking I2C.");
+	println("Finished checking I2C.");
 }
 
 void printData(mpu6050_t data) {
@@ -170,7 +177,13 @@ void printData(mpu6050_t data) {
 	print(ga::convertFromRawGyro(data.gyro_y));
 	print("deg/s, GYR_Z = ");
 	print(ga::convertFromRawGyro(data.gyro_z));
-	print("deg/s.");
+	print("deg/s,\t ANG_X = ");
+	print(ga::convertFromRawGyro(data.ang_x));
+	print("deg, ANG_Y = ");
+	print(ga::convertFromRawGyro(data.ang_y));
+	print("deg, ANG_Z = ");
+	print(ga::convertFromRawGyro(data.ang_z));
+	print("deg.");
 }
 
 void printData(hmc5883_t data) {
@@ -279,7 +292,7 @@ void read(uint16_t internal_address, uint8_t array[], uint8_t length) {
 	_send_byte(upper_address);
 	_send_byte(lower_address);
 	_start(I2C_ADDR_EEPROM, I2C_READ);
-	while(--length) { // omit last loop
+	while (--length) { // omit last loop
 		*ptr++ = _read_byte(true);
 	}
 	*ptr = _read_byte(false);
@@ -307,12 +320,12 @@ void read(uint16_t internal_address, uint8_t array[], uint8_t length) {
  */
 namespace ga {
 
-int16_t calibration_params[6] = {0, 0, 0, 0, 0, 0}; // calibration parameters -- must be added to get correct value(s).
-double convertFromRawAccel(int16_t raw){
+int16_t calibration_params[6] = { 0, 0, 0, 0, 0, 0 }; // calibration parameters -- must be added to get correct value(s).
+double convertFromRawAccel(int16_t raw) {
 	return raw * ACCEL_RESOLUTION;
 }
 
-double convertFromRawGyro(int16_t raw){
+double convertFromRawGyro(int16_t raw) {
 	return raw * GYRO_RESOLUTION;
 }
 
@@ -331,10 +344,10 @@ void _init() {
 	_send_byte(DLPF_CFG);					// CONFIG
 	_send_byte(FS_SEL << 3);				// GYRO_CONFIG
 	_send_byte(AFS_SEL << 3);				// ACCEL_CONFIG
-	_send_byte(0);							// FIFO_EN	 	-- Disable All FIFO by default
+	_send_byte(0);				// FIFO_EN	 	-- Disable All FIFO by default
 	_start(I2C_ADDR_GYRO_ACC, I2C_WRITE);
 	_send_byte(0x37);
-	_send_byte(0x02);						// INT_PIN_CFG 	-- Enable I2C_BYPASS_EN
+	_send_byte(0x02);					// INT_PIN_CFG 	-- Enable I2C_BYPASS_EN
 	_stop();
 
 	_delay_ms(1);							// wait for warm up
@@ -350,7 +363,7 @@ void calibrate() {
 	}
 
 	mpu6050_t buf;
-	int32_t motion_buffers[6] = {0, 0, 0, 0, 0, 0};
+	int32_t motion_buffers[6] = { 0, 0, 0, 0, 0, 0 };
 	for (int i = 0; i < (1 << (I2C_ACC_CALIBRATION_SCALE + 1)); i++) {
 		buf = read();
 
@@ -367,7 +380,8 @@ void calibrate() {
 	}
 
 	for (int i = 0; i < 6; i++) {
-		calibration_params[i] = - (motion_buffers[i] >> I2C_ACC_CALIBRATION_SCALE);
+		calibration_params[i] =
+				-(motion_buffers[i] >> I2C_ACC_CALIBRATION_SCALE);
 	}
 	calibration_params[2] += 4096; // for acc_z => value must +1.00g
 }
@@ -387,6 +401,7 @@ mpu6050_t read() {
 	buf.gyro_z = _read_word(false) + calibration_params[5];
 
 	_stop();
+	_calculate_angle(buf);
 	return buf;
 }
 
@@ -394,7 +409,7 @@ mpu6050_t read() {
 
 mpu6050_t read_smooth() {
 	mpu6050_t imm;
-	int32_t buffers[7] = {0, 0, 0, 0, 0, 0, 0};					// Buffer used to sum and find average of read values
+	int32_t buffers[7] = { 0, 0, 0, 0, 0, 0, 0 };// Buffer used to sum and find average of read values
 	for (int i = 0; i < (1 << I2C_GA_SMOOTHNESS_SCALE); i++) {
 		imm = read();
 		buffers[0] += imm.acc_x;
@@ -413,21 +428,25 @@ mpu6050_t read_smooth() {
 	imm.gyro_y = buffers[4] >> I2C_GA_SMOOTHNESS_SCALE;
 	imm.gyro_z = buffers[5] >> I2C_GA_SMOOTHNESS_SCALE;
 	imm.temperature = buffers[6] >> I2C_GA_SMOOTHNESS_SCALE;
+	_calculate_angle(imm);
 	return imm;
 }
 
 const double PI = (3.14159265358979);
 const double RAD_TO_DEG = (180 / PI);
+#define ANGLE_MIN_IN -32768
+#define ANGLE_MAX_IN 32767
+#define ANGLE_MIN_OUT -90
+#define ANGLE_MAX_OUT 90
 
 void _calculate_angle(mpu6050_t data) {
-	int x_mapped = map(data.acc_x, -65536, 65535, -90, 90);
-	int y_mapped = map(data.acc_y, -65536, 65535, -90, 90);
-	int z_mapped = map(data.acc_z, -65536, 65535, -90, 90);
-	data.ang_x = 10;
-	data.ang_y = (atan2(-x_mapped, -z_mapped));
-
+	int x_mapped = map(data.acc_x, -32768, 32767, -90, 90);
+	int y_mapped = map(data.acc_y, -32768, 32767, -90, 90);
+	int z_mapped = map(data.acc_z, -32768, 32767, -90, 90);
+	data.ang_x = RAD_TO_DEG * (atan2(-y_mapped, -z_mapped) + PI);
+	data.ang_y = RAD_TO_DEG * (atan2(-x_mapped, -z_mapped) + PI);
+	data.ang_z = RAD_TO_DEG * (atan2(-y_mapped, -x_mapped) + PI);
 }
-
 
 } /* namespace ga */
 // ======== COMPASS ======== //
@@ -436,9 +455,9 @@ namespace cmps {
 void _init() {
 	_start(I2C_ADDR_COMPASS, I2C_WRITE);
 	_send_byte(0x00);
-	_send_byte((HMC5883_MA << 5) | (HMC5883_DO << 2) | (HMC5883_MS & 0x03) ); 	// CONFIG_1
-	_send_byte(HMC5883_GN << 5);												// CONFIG_2
-	_send_byte(0x00);															// MODE
+	_send_byte((HMC5883_MA << 5) | (HMC5883_DO << 2) | (HMC5883_MS & 0x03)); // CONFIG_1
+	_send_byte(HMC5883_GN << 5);									// CONFIG_2
+	_send_byte(0x00);													// MODE
 	_stop();
 }
 
@@ -455,9 +474,12 @@ hmc5883_t read() {
 	_stop();
 
 	// Check Overflows
-	if (buffer.mag_x == COMPASS_OVERFLOW) _error("COMPASS_OVERFLOW::X");
-	if (buffer.mag_y == COMPASS_OVERFLOW) _error("COMPASS_OVERFLOW::Y");
-	if (buffer.mag_z == COMPASS_OVERFLOW) _error("COMPASS_OVERFLOW::Z");
+	if (buffer.mag_x == COMPASS_OVERFLOW)
+		_error("COMPASS_OVERFLOW::X");
+	if (buffer.mag_y == COMPASS_OVERFLOW)
+		_error("COMPASS_OVERFLOW::Y");
+	if (buffer.mag_z == COMPASS_OVERFLOW)
+		_error("COMPASS_OVERFLOW::Z");
 	return buffer;
 }
 
@@ -467,10 +489,12 @@ double convertFromRawMag(int16_t raw) {
 
 unsigned int bearingFrom(hmc5883_t mag_data) {
 	double heading = atan2(mag_data.mag_y, mag_data.mag_x);
-	heading *= 180/M_PI;
+	heading *= 180 / M_PI;
 	heading += MAG_DEC_CORRECTION;
-	if (heading < 0) heading += 360;
-	else if (heading > 360) heading -= 360;
+	if (heading < 0)
+		heading += 360;
+	else if (heading > 360)
+		heading -= 360;
 	return (unsigned int) heading;
 }
 
@@ -502,15 +526,15 @@ void _update_calibration_param() {
 	params.ac4 = _read_word(true);
 	params.ac5 = _read_word(true);
 	params.ac6 = _read_word(true);
-	params.b1  = _read_word(true);
-	params.b2  = _read_word(true);
-	params.mb  = _read_word(true);
-	params.mc  = _read_word(true);
-	params.md  = _read_word(false);
+	params.b1 = _read_word(true);
+	params.b2 = _read_word(true);
+	params.mb = _read_word(true);
+	params.mc = _read_word(true);
+	params.md = _read_word(false);
 	_stop();
 }
 
-long get_utemp () {
+long get_utemp() {
 	int16_t buffer;
 
 	// Set mode to 'read temperature'
@@ -555,14 +579,14 @@ long get_upres() {
 	_stop();
 
 //	buffer = ( (upper<<16) + (middle<< 8) + lower);
-	buffer = ( (upper<<16) + (middle<< 8) + lower) >> (8 - OSS);
+	buffer = ((upper << 16) + (middle << 8) + lower) >> (8 - OSS);
 	return buffer;
 }
 
 long get_temperature(long uTemp) {
 	// Refer to datasheet
 	long x1 = ((uTemp - params.ac6) * params.ac5) >> 15;
-	long x2 = ((int32_t)params.mc << 11) / (x1 + params.md);
+	long x2 = ((int32_t) params.mc << 11) / (x1 + params.md);
 	long b5 = x1 + x2;
 	return (b5 + 8) >> 4;
 //	return (b5 * 10 + 8) >> 4;
@@ -574,7 +598,7 @@ long get_pressure(long uTemp, long uPres) {
 	uint32_t b4, b7;
 
 	x1 = ((uTemp - params.ac6) * params.ac5) >> 15;
-	x2 = ((int32_t)params.mc << 11) / (x1 + params.md);
+	x2 = ((int32_t) params.mc << 11) / (x1 + params.md);
 	b5 = x1 + x2;
 	b6 = b5 - 4000;
 
@@ -586,8 +610,8 @@ long get_pressure(long uTemp, long uPres) {
 	x1 = (params.ac3 * b6) >> 13;
 	x2 = (params.b1 * ((b6 * b6) >> 12)) >> 16;
 	x3 = ((x1 + x2) + 2) >> 2;
-	b4 = (params.ac4 * (uint32_t)(x3 + 32768)) >> 15;
-	b7 = ((uint32_t)uPres - b3) * (50000 >> OSS);
+	b4 = (params.ac4 * (uint32_t) (x3 + 32768)) >> 15;
+	b7 = ((uint32_t) uPres - b3) * (50000 >> OSS);
 
 	if (b7 < 0x80000000) {
 		p = (b7 * 2) / b4;
@@ -604,7 +628,6 @@ long get_pressure(long uTemp, long uPres) {
 long get_altitude(long pressure) {
 	return 44330 * (1 - pow(pressure / PRESSURE_SEA_LEVEL, 1 / 5.255));
 }
-
 
 } /* namespace baro */
 

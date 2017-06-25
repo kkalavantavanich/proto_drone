@@ -105,6 +105,7 @@ namespace ga {
 	void calibrate();
 	mpu6050_t read();
 	mpu6050_t read_smooth();
+	void _calculate_angle(mpu6050_t data);
 }
 
 // ======== COMPASS ======== //
