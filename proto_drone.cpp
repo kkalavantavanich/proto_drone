@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
+#include <Arduino.h>
 
 #include "USART.h"  // Print
 #include "I2C.h" 	// Sensors
@@ -274,10 +275,6 @@ int main(void) {
 
 //		 Print Data
 		i2c::printData(motion_data);
-		print(" ");
-		i2c::printData(compass_data);
-		print(" ");
-		i2c::printData(baro_data);
 //		print("   ");
 //		print("Orient.[");
 //		print(i2c::ga::convertFromRawGyro(currentOrientation[0]));
@@ -300,7 +297,7 @@ int main(void) {
 //		print(rxValues[3]);
 
 		pwm_update();
-		_delay_ms(1000);
+		_delay_us(3000);
 		println();
 	}
 }
