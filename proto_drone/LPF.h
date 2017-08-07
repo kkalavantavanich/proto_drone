@@ -18,7 +18,7 @@ private:
 	uint8_t _pos = 0;                   // pointer at last value
 	T avg = 0;                          // average value
 	void _updateAvg(T val) {
-		avg = val + (avg >> 1);
+		avg = ((3 * val + avg) >> 2);
 		//avg = val + (avg / 2);
 	}
 public:
