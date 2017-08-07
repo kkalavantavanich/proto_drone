@@ -8,11 +8,17 @@
 #ifndef PROTO_DRONE_LPF_H_
 #define PROTO_DRONE_LPF_H_
 
+template <typename T = int>
 class LPF {
 public:
-	void push(int val);
-	int peek();
-	int get();
+	/** input new value into LPF */
+	void push(T val);
+
+	/** peek at last value inputed */
+	T peek();
+
+	/** Get the low-passed value */
+	T get();
 };
 
 

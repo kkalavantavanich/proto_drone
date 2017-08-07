@@ -8,18 +8,20 @@
  */
 
 #define LPF_BUFF_SIZE 10
+
+template <typename T = int>
 class LPF {
 private:
-	int _buff[LPF_BUFF_SIZE] = {0};       // for
+	T _buff[LPF_BUFF_SIZE] = {0};       // for future use
 	uint8_t _size = 0;
-	uint8_t _pos = 0;                     // pointer at last value
-	int avg = 0;
-	void _updateAvg(int val) {
+	uint8_t _pos = 0;                   // pointer at last value
+	T avg = 0;                          // average value
+	void _updateAvg(T val) {
 		avg = val + (avg >> 1);
 	  //avg = val + (avg / 2);
 	}
 public:
-	void push(int val) {
+	void push(T val) {
 		if (_size < LPF_BUFF_SIZE) {
 			if (_size > 0) {
 				_buff[++_pos] = val;
@@ -36,10 +38,10 @@ public:
 		}
 
 	}
-	int peek() {
+	T peek() {
 		return _buff[_pos];
 	}
-	int get() {
+	T get() {
 		return avg;
 	}
 };
