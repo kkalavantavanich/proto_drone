@@ -4,7 +4,8 @@
 #include <Arduino.h>
 
 #include "USART.h"  // Print
-#include "I2C.h"   // Sensors
+#include "I2C.h"    // Sensors
+#include "LPF.h"    // Low Pass Filter
 
 //#define DEBUG
 
@@ -56,9 +57,10 @@ uint32_t kronos() {
 }
 
 // Strategy //
-// 1. Receive with RX
-// 2. Process with PID
-// 3. Actuate with PWM
+// 1. Receive with RX    => rxValues
+// 2. Low pass RX Values => rxlpValues
+// 3. Process with PID   => motorValues
+// 4. Actuate with PWM   => OCRnX
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -75,7 +77,10 @@ void rx_init(void) {
 	PCICR |= (1 << PCIE0) | (1 << PCIE2);
 }
 
-uint32_t rxValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };    //
+uint32_t rxValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
+uint32_t rxlpValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
+LPF<uint32_t> lpfs[6];
+
 uint32_t lastTime[6] = { 0, 0, 0, 0, 0, 0 }; // Last Time Edge Change was detected for RX Pins
 
 // High Priority Control
@@ -165,6 +170,20 @@ ISR(PCINT2_vect) {
 	}
 
 }
+
+////////////// RX Low Pass ///////////////////////////////
+
+void low_pass_update() {
+	for (int i = 0; i < 6; i++) {
+		lpfs[i].push(rxValues[i]);
+		lpfs[i].get(rxlpValues[i]);
+		print("pushed ");
+		print(rxValues[i]);
+		print(", get ");
+		print(rxlpValues[i]);
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////////
 
 //// PWM ////
@@ -172,8 +191,8 @@ ISR(PCINT2_vect) {
 #define PWM_MAX_INPUT 4000UL
 #define PWM_MIN_OUTPUT 15UL
 #define PWM_MAX_OUTPUT 70UL
-#define PWM_TO_MINDEG (-30L) //อัตราเร็วในการหมุนเมื่อโยกสุด
-#define PWM_TO_MAXDEG 30L
+#define RATE_MINDEGSEC (-30L)
+#define RATE_MAXDEGSEC 30L
 
 #define RANGE_INPUT (PWM_MAX_INPUT - PWM_MIN_INPUT)
 #define RANGE_OUTPUT (PWM_MAX_OUTPUT - PWM_MIN_OUTPUT)
@@ -212,12 +231,12 @@ double pitch_I = 0;
 
 //_______________________________________________________________________________________________________
 void update_motor_values() {
-	uint32_t rxValueT = constrain(rxValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT);
+	uint32_t rxValueT = constrain(rxlpValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT);
 	uint32_t rxValuesmapT = map(rxValueT, PWM_MIN_INPUT, PWM_MAX_INPUT,
 	PWM_MIN_OUTPUT, PWM_MAX_OUTPUT);
-	uint32_t rxValueP = constrain(rxValues[2], PWM_MIN_INPUT, PWM_MAX_INPUT);
+	uint32_t rxValueP = constrain(rxlpValues[2], PWM_MIN_INPUT, PWM_MAX_INPUT);
 	int32_t rxValuesmapP = map(rxValueP, PWM_MIN_INPUT, PWM_MAX_INPUT,
-	PWM_TO_MINDEG, PWM_TO_MAXDEG);
+	RATE_MINDEGSEC, RATE_MAXDEGSEC);
 
 //  print(">> rxValueT=");
 //  print(rxValueT, 10);
@@ -231,16 +250,16 @@ void update_motor_values() {
 
 // PID CONTROL START RATE MODE
 // Coefficient
-	double Kp_RateRoll = 1;
-	double Ki_RateRoll = 0.0;
-	double Kd_RateRoll = 0.0;
-	double Kp_RatePitch = 0.2;
+//	double Kp_RateRoll = 1;
+//	double Ki_RateRoll = 0.0;
+//	double Kd_RateRoll = 0.0;
+	double Kp_RatePitch = 0.07;
 	double Ki_RatePitch = 0.0;
-	double Kd_RatePitch = 0.0000;
-	double Kp_RateYaw = 2.2;                      //2.2
-	double Ki_RateYaw = 0.0;
-	double Kd_RateYaw = 0.0;
-	uint32_t dt = LOOPTIME_US + 26000;
+	double Kd_RatePitch = 0.0;
+//	double Kp_RateYaw = 2.2;                      //2.2
+//	double Ki_RateYaw = 0.0;
+//	double Kd_RateYaw = 0.0;
+	double dt_s = 68000 / 1e6;
 
 //
 
@@ -255,17 +274,17 @@ void update_motor_values() {
 	double err_pitch = -rxValuesmapP - currentPitchRate;
 	// print(", ERR_PITCH: ");
 	// print(err_pitch);
-	pitch_I += err_pitch * dt;
+	pitch_I += err_pitch * dt_s;
 	pitch_I = constrain(pitch_I, -20, 20);
-	double pitch_D = (currentPitchRate - previousPitchRate) * 10e6 / dt;
+	double pitch_D = (currentPitchRate - previousPitchRate) / dt_s;
 	previousPitchRate = currentPitchRate;
-	double control_pitch = Kp_RatePitch * err_pitch + Kd_RatePitch * pitch_D
+	double control_pitch = Kp_RatePitch * err_pitch - Kd_RatePitch * pitch_D
 			+ Ki_RatePitch * pitch_I;
 	control_pitch = constrain(control_pitch, -10, 10);
 	print(" Errorpitch:");
 	print(err_pitch);
-	print("ORDERPITCH:");
-	print(-rxValuesmapP);
+	print(", ERROR_RATED:");
+	print( Kd_RatePitch * pitch_D, 3);
 	print(",Currentpitch ");
 	print(currentPitchRate);
 
@@ -307,6 +326,7 @@ void pwm_update() {
 
 /////////////////////////////////////////////////////////////////////////////////
 
+
 int main(void) {
 	// Serial.begin(115200)
 	UCSR0B |= (1 << TXEN0);
@@ -331,22 +351,23 @@ int main(void) {
 
 	// global variables in main loop //
 	int i = 0;                      // loop index
-	uint8_t ext_pin_state = 0xFF;           // External Pin
+//	uint8_t ext_pin_state = 0xFF;           // External Pin
 
 	mpu6050_t motion_data;
 	hmc5883_t compass_data;
 	bmp085_t baro_data;
 
-	int16_t currentOrientation[3] = { 0, 0, 0 };  // Calculated from gyro data
-	int16_t _gyro_prev[3] = { 0, 0, 0 };        // previous gyro value
-	int16_t _gyro_imm[3] = { 0, 0, 0 };         // immediate gyro value
-
-	int16_t currentVelocity[3] = { 0, 0, 0 }; // Calculated from accelerometer
-	int16_t _acc_prev[3] = { 0, 0, 0 };
-	int16_t _acc_imm[3] = { 0, 0, 0 };
+//	int16_t currentOrientation[3] = { 0, 0, 0 };  // Calculated from gyro data
+//	int16_t _gyro_prev[3] = { 0, 0, 0 };        // previous gyro value
+//	int16_t _gyro_imm[3] = { 0, 0, 0 };         // immediate gyro value
+//
+//	int16_t currentVelocity[3] = { 0, 0, 0 }; // Calculated from accelerometer
+//	int16_t _acc_prev[3] = { 0, 0, 0 };
+//	int16_t _acc_imm[3] = { 0, 0, 0 };
 
 	sei();
 
+	uint32_t prev_kronos = kronos(), program_time_kr = 1000;
 	println("Setup Finished.");
 
 	///////////////////////// MAIN LOOP ///////////////////////////
@@ -383,6 +404,7 @@ int main(void) {
 //    print(ext_pin_state, 16);
 		// Change External Pin outputs=
 //    i2c::ext::write(ext_pin_state);
+		low_pass_update();
 
 		// Read data from sensors
 		motion_data = i2c::ga::read_smooth();
@@ -446,6 +468,10 @@ int main(void) {
 		update_motor_values();
 		pwm_update();
 
+		print(">> Program Time (Kronos): ");
+		print(program_time_kr);
+		println();
+
 		print(">> OCR values: ");
 		print(OCR2A, 10);
 		print(", ");
@@ -463,10 +489,20 @@ int main(void) {
 		}
 		println();
 
+		print(">> rxlpValues: ");
+		for (int i = 0; i < 6; i++) {
+			print(rxlpValues[i]);
+			print(" ");
+		}
+		println();
+
 		print(">> drone_mode: ");
 		println(drone_mode);
 
 		_delay_us(LOOPTIME_US);
+
+		program_time_kr = kronos() - prev_kronos;
+		prev_kronos = kronos();
 		println();
 	}
 }
