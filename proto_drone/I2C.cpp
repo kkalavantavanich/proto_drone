@@ -430,35 +430,21 @@ mpu6050_t read_smooth() {
 	imm.gyro_z = buffers[5] >> I2C_GA_SMOOTHNESS_SCALE;
 	imm.temperature = buffers[6] >> I2C_GA_SMOOTHNESS_SCALE;
 	_calculate_angle(imm);
-#ifdef DEBUG
-	print("> imm.ang_x=");
-	print(imm.ang_x);
-	print(", imm.ang_y=");
-	print(imm.ang_y);
-
-	println();
-#endif
 	return imm;
 }
 
 void _calculate_angle(mpu6050_t &data) {
+	/*
 	acc_ang_x_deg += convertFromRawGyro(data.gyro_x) * DELTA_TIME_US / 1000000.0;
 	acc_ang_y_deg += convertFromRawGyro(data.gyro_y) * DELTA_TIME_US / 1000000.0;
 	acc_ang_z_deg += convertFromRawGyro(data.gyro_z) * DELTA_TIME_US / 1000000.0;
 	data.ang_x = acc_ang_x_deg;
 	data.ang_y = acc_ang_y_deg;
 	data.ang_z = acc_ang_z_deg;
-#ifdef DEBUG
-	print("> acc_ang_x=");
-	print(acc_ang_x_deg);
-	print(", acc_ang_y=");
-	print(acc_ang_y_deg);
-	print(", acc_ang_z=");
-	print(acc_ang_z_deg);
-	print(", data.ang_x=");
-	print(data.ang_x);
-	println();
-#endif
+	*/
+	data.ang_x = atan2(-data.acc_x, data.acc_z) * 57.2958;
+	data.ang_y = atan2(-data.acc_y, data.acc_z) * 57.2958;
+	data.ang_z = 0;
 }
 
 } /* namespace ga */

@@ -2,6 +2,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <Arduino.h>
+#include <math.h>
 
 #include "USART.h"  // Print
 #include "I2C.h"    // Sensors
@@ -33,6 +34,12 @@
 /* Drone mode -- controlled by switch-02 (channel 6) */
 int drone_mode = MODE_RATE;
 
+// Global Vars //
+mpu6050_t motion_data;
+hmc5883_t compass_data;
+bmp085_t baro_data;
+uint32_t prev_kronos, program_time_kr = 1000;
+
 /// TIMER ///
 
 volatile uint32_t timer_ovf_count = 0;
@@ -56,6 +63,62 @@ uint32_t kronos() {
 	return out;
 }
 
+// USART //
+ISR(USART_RX_vect) {
+	/* Get and return received data from buffer */
+	// echo function
+    // write(UDR0);
+	uint8_t data = UDR0;
+	switch(data) {
+	case 't':
+		write(program_time_kr);
+		break;
+	case 'a':
+		write(motion_data.acc_x);
+		write(motion_data.acc_y);
+		write(motion_data.acc_z);
+		write(motion_data.gyro_x);
+		write(motion_data.gyro_y);
+		write(motion_data.gyro_z);
+		write((short) (motion_data.ang_x * 16));
+		write((short) (motion_data.ang_y * 16));
+		write((short) (motion_data.ang_z * 16));
+		break;
+	case 'b':
+		write(motion_data.acc_x);
+		break;
+	case 'c':
+		write(motion_data.acc_y);
+		break;
+	case 'd':
+		write(motion_data.acc_z);
+		break;
+	case 'e':
+		write(motion_data.gyro_x);
+		break;
+	case 'f':
+		write(motion_data.gyro_y);
+		break;
+	case 'g':
+		write(motion_data.gyro_z);
+		break;
+	case 'h':
+		write((short) (motion_data.ang_x * 16));
+		break;
+	case 'i':
+		write((short) (motion_data.ang_y * 16));
+		break;
+	case 'j':
+		write((short) (motion_data.ang_z * 16));
+		break;
+	case 'Z':				// checking
+		write(0xBEEF);
+		break;
+	default:
+		write("unknown command");
+	}
+}
+
 // Strategy //
 // 1. Receive with RX    => rxValues
 // 2. Low pass RX Values => rxlpValues
@@ -77,9 +140,9 @@ void rx_init(void) {
 	PCICR |= (1 << PCIE0) | (1 << PCIE2);
 }
 
-uint32_t rxValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
-uint32_t rxlpValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
-LPF<uint32_t> lpfs[6];
+uint16_t rxValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
+uint16_t rxlpValues[6] = { 3000, 3000, 3000, 3000, 3000, 3000 };
+LPF<uint16_t> lpfs[6];
 
 uint32_t lastTime[6] = { 0, 0, 0, 0, 0, 0 }; // Last Time Edge Change was detected for RX Pins
 
@@ -177,10 +240,6 @@ void low_pass_update() {
 	for (int i = 0; i < 6; i++) {
 		lpfs[i].push(rxValues[i]);
 		lpfs[i].get(rxlpValues[i]);
-		print("pushed ");
-		print(rxValues[i]);
-		print(", get ");
-		print(rxlpValues[i]);
 	}
 }
 
@@ -229,7 +288,8 @@ double toy_gyro_x = 0;
 double previousPitchRate = 0.0;
 double pitch_I = 0;
 
-//_______________________________________________________________________________________________________
+///////////////////////////////////////////////////////////////////////////////////
+
 void update_motor_values() {
 	uint32_t rxValueT = constrain(rxlpValues[0], PWM_MIN_INPUT, PWM_MAX_INPUT);
 	uint32_t rxValuesmapT = map(rxValueT, PWM_MIN_INPUT, PWM_MAX_INPUT,
@@ -267,10 +327,6 @@ void update_motor_values() {
 //  print("TGX: ");
 //  print(toy_gyro_x);
 	double currentPitchRate = toy_gyro_x;
-	print("Current_pitch :");
-	print(currentPitchRate);
-	print(",Previus_pitch :");
-	print(previousPitchRate);
 	double err_pitch = -rxValuesmapP - currentPitchRate;
 	// print(", ERR_PITCH: ");
 	// print(err_pitch);
@@ -281,23 +337,12 @@ void update_motor_values() {
 	double control_pitch = Kp_RatePitch * err_pitch - Kd_RatePitch * pitch_D
 			+ Ki_RatePitch * pitch_I;
 	control_pitch = constrain(control_pitch, -10, 10);
-	print(" Errorpitch:");
-	print(err_pitch);
-	print(", ERROR_RATED:");
-	print( Kd_RatePitch * pitch_D, 3);
-	print(",Currentpitch ");
-	print(currentPitchRate);
-
-	print(",PitchD ");
-	print(pitch_D);
-	print(", Ratepitch: ");
-	print(Kd_RatePitch * pitch_D);
-	println();
 
 // ROLL PID
 // Wait for pitch to success
 // YAW PID
 // WAIT for pitch to success
+
 	motorValues[0] = rxValuesmapT - control_pitch;
 	motorValues[1] = rxValuesmapT + control_pitch;
 	motorValues[2] = rxValuesmapT + control_pitch;
@@ -326,12 +371,12 @@ void pwm_update() {
 
 /////////////////////////////////////////////////////////////////////////////////
 
-
 int main(void) {
 	// Serial.begin(115200)
-	UCSR0B |= (1 << TXEN0);
+	UCSR0B |= (1 << TXEN0) || (1 << RXEN0);
 	UBRR0L = 8;
-	println("Starting...");
+	UCSR0B |= (1 << RXCIE0); 	// enable USART receive interrupt
+//	println("Starting...");
 
 	// no power reduction
 	PRR = 0x00;
@@ -344,18 +389,15 @@ int main(void) {
 
 	// i2c initialize
 	i2c::initialize();
-	i2c::check_addresses();
+	//i2c::check_addresses();
 
 	// timer init
 	timer_init();
+	prev_kronos = kronos();
 
 	// global variables in main loop //
 	int i = 0;                      // loop index
 //	uint8_t ext_pin_state = 0xFF;           // External Pin
-
-	mpu6050_t motion_data;
-	hmc5883_t compass_data;
-	bmp085_t baro_data;
 
 //	int16_t currentOrientation[3] = { 0, 0, 0 };  // Calculated from gyro data
 //	int16_t _gyro_prev[3] = { 0, 0, 0 };        // previous gyro value
@@ -367,14 +409,13 @@ int main(void) {
 
 	sei();
 
-	uint32_t prev_kronos = kronos(), program_time_kr = 1000;
-	println("Setup Finished.");
+//	println("Setup Finished.");
 
 	///////////////////////// MAIN LOOP ///////////////////////////
 	while (true) {
 		// Console Number
-		print(++i);
-		print(" >> ");
+//		print(++i);
+//		print(" >> ");
 
 		if (drone_mode == MODE_CALIBRATE) {
 			// TODO: check throttle minimum
@@ -407,9 +448,11 @@ int main(void) {
 		low_pass_update();
 
 		// Read data from sensors
+		//UCSR0B &= ~(1 << RXCIE0); 	// disable USART receive interrupt
 		motion_data = i2c::ga::read_smooth();
 		compass_data = i2c::cmps::read();
 		baro_data = i2c::baro::read();
+		//UCSR0B |= (1 << RXCIE0); 	// enable USART receive interrupt
 
 		toy_gyro_x = i2c::ga::convertFromRawGyro(motion_data.gyro_x);
 
@@ -442,9 +485,9 @@ int main(void) {
 //     Print Data
 
 		//i2c::printData(motion_data);
-		print(" ");
+//		print(" ");
 //    i2c::printData(compass_data);
-		print(" ");
+//		print(" ");
 //    i2c::printData(baro_data);
 //    print("   ");
 //    print("Orient.[");
@@ -468,42 +511,42 @@ int main(void) {
 		update_motor_values();
 		pwm_update();
 
-		print(">> Program Time (Kronos): ");
-		print(program_time_kr);
-		println();
+//		print(">> Program Time (Kronos): ");
+//		print(program_time_kr);
+//		println();
 
-		print(">> OCR values: ");
-		print(OCR2A, 10);
-		print(", ");
-		print(OCR1B, 10);
-		print(", ");
-		print(OCR2B, 10);
-		print(", ");
-		print(OCR1A, 10);
-		println();
+//		print(">> OCR values: ");
+//		print(OCR2A, 10);
+//		print(", ");
+//		print(OCR1B, 10);
+//		print(", ");
+//		print(OCR2B, 10);
+//		print(", ");
+//		print(OCR1A, 10);
+//		println();
+//
+//		print(">> rxValues: ");
+//		for (int i = 0; i < 6; i++) {
+//			print(rxValues[i]);
+//			print(" ");
+//		}
+//		println();
+//
+//		print(">> rxlpValues: ");
+//		for (int i = 0; i < 6; i++) {
+//			print(rxlpValues[i]);
+//			print(" ");
+//		}
+//		println();
+//
+//		print(">> drone_mode: ");
+//		println(drone_mode);
 
-		print(">> rxValues: ");
-		for (int i = 0; i < 6; i++) {
-			print(rxValues[i]);
-			print(" ");
-		}
-		println();
-
-		print(">> rxlpValues: ");
-		for (int i = 0; i < 6; i++) {
-			print(rxlpValues[i]);
-			print(" ");
-		}
-		println();
-
-		print(">> drone_mode: ");
-		println(drone_mode);
-
-		_delay_us(LOOPTIME_US);
+//      _delay_us(LOOPTIME_US);
 
 		program_time_kr = kronos() - prev_kronos;
 		prev_kronos = kronos();
-		println();
+//		println();
 	}
 }
 

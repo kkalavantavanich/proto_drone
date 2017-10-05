@@ -23,6 +23,17 @@ void print(double, uint8_t digits = 2);
 void println();
 void println(const char* str);
 void println(unsigned long, uint8_t base = 10);
+
+void write(const uint8_t *buffer, uint8_t n);
+void write(const char *str);
+void write(char c);
+void write(uint8_t n);
+void write(uint16_t n);
+void write(uint32_t n);
+void write(int8_t n);
+void write(int16_t n);
+void write(int32_t n);
+
 uint16_t strlen(const char *s); // String must be < 65535 chars
 
 #endif /* USART_H_ */

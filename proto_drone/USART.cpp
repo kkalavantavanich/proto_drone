@@ -7,10 +7,10 @@
 
 #include "USART.h"
 
-
 void USART_transmit(const uint8_t data) {
 	/* wait for empty transmit buffer */
-	while (!(UCSR0A & (1 << UDRE0)));
+	while (!(UCSR0A & (1 << UDRE0)))
+		;
 	UDR0 = data;
 }
 
@@ -26,7 +26,7 @@ void print(const char *str) {
 	}
 }
 
-void print(char c){
+void print(char c) {
 	USART_transmit(c);
 }
 
@@ -40,7 +40,8 @@ void print(int n, uint8_t base) {
 	char *str = &buf[sizeof(buf) - 1];
 	*str = '\0';
 
-	if (base < 2) base = 10;
+	if (base < 2)
+		base = 10;
 
 	do {
 		char c = n % base;
@@ -64,7 +65,8 @@ void print(long n, uint8_t base) {
 	char *str = &buf[sizeof(buf) - 1];
 	*str = '\0';
 
-	if (base < 2) base = 10;
+	if (base < 2)
+		base = 10;
 
 	do {
 		char c = n % base;
@@ -83,7 +85,8 @@ void print(unsigned long n, uint8_t base) {
 	char *str = &buf[sizeof(buf) - 1];
 	*str = '\0';
 
-	if (base < 2) base = 10;
+	if (base < 2)
+		base = 10;
 
 	do {
 		char c = n % base;
@@ -102,7 +105,8 @@ void print(unsigned int n, uint8_t base) {
 	char *str = &buf[sizeof(buf) - 1];
 	*str = '\0';
 
-	if (base < 2) base = 10;
+	if (base < 2)
+		base = 10;
 
 	do {
 		char c = n % base;
@@ -116,46 +120,43 @@ void print(unsigned int n, uint8_t base) {
 	} while (*str);
 }
 
-void print(double number, uint8_t digits)
-{
-  if (number > 4294967040.0) return print ("ovf");  // constant determined empirically
-  if (number <-4294967040.0) return print ("ovf");  // constant determined empirically
+void print(double number, uint8_t digits) {
+	if (number > 4294967040.0)
+		return print("ovf");  // constant determined empirically
+	if (number < -4294967040.0)
+		return print("ovf");  // constant determined empirically
 
-  // Handle negative numbers
-  if (number < 0.0)
-  {
-     print('-');
-     number = -number;
-  }
+	// Handle negative numbers
+	if (number < 0.0) {
+		print('-');
+		number = -number;
+	}
 
-  // Round correctly so that print(1.999, 2) prints as "2.00"
-  double rounding = 0.5;
-  for (uint8_t i=0; i<digits; ++i)
-    rounding /= 10.0;
+	// Round correctly so that print(1.999, 2) prints as "2.00"
+	double rounding = 0.5;
+	for (uint8_t i = 0; i < digits; ++i)
+		rounding /= 10.0;
 
-  number += rounding;
+	number += rounding;
 
-  // Extract the integer part of the number and print it
-  unsigned long int_part = (unsigned long) number;
-  double remainder = number - (double) int_part;
-  print(int_part);
+	// Extract the integer part of the number and print it
+	unsigned long int_part = (unsigned long) number;
+	double remainder = number - (double) int_part;
+	print(int_part);
 
-  // Print the decimal point, but only if there are digits beyond
-  if (digits > 0) {
-    print('.');
-  }
+	// Print the decimal point, but only if there are digits beyond
+	if (digits > 0) {
+		print('.');
+	}
 
-
-  // Extract digits from the remainder one at a time
-  while (digits-- > 0)
-  {
-    remainder *= 10.0;
-    unsigned int toPrint = (unsigned int)(remainder);
-    print(toPrint);
-    remainder -= toPrint;
-  }
+	// Extract digits from the remainder one at a time
+	while (digits-- > 0) {
+		remainder *= 10.0;
+		unsigned int toPrint = (unsigned int) (remainder);
+		print(toPrint);
+		remainder -= toPrint;
+	}
 }
-
 
 void println() {
 	USART_transmit('\n');
@@ -171,13 +172,75 @@ void println(const char *str) {
 	USART_transmit('\n');
 }
 
-uint16_t strlen(const char *s)
-{
-    char const * const start = s;
-    while( *s != 0 )
-    {
-        ++s;
-    }
-    return s - start;
+void write(const uint8_t *buffer, uint8_t n) {
+	while (n--) {
+		USART_transmit(*buffer++);
+	}
+}
+
+void write(const char *str) {
+	if (strlen(str) != 0) {
+		print((const uint8_t *) str, strlen(str));
+	}
+}
+
+void write(char c) {
+	USART_transmit(c);
+}
+
+void write(uint8_t n) {
+	USART_transmit(n);
+}
+
+void write(uint16_t n) {
+	uint8_t buff;
+	buff = (n >> 8) & 0x00FF; // MSB
+	USART_transmit(buff);
+	buff = n & 0x00FF;
+	USART_transmit(buff);
+}
+
+void write(uint32_t n) {
+	uint8_t buff;
+	buff = (n >> 24) & 0x000000FF; // MSB
+	USART_transmit(buff);
+	buff = (n >> 16) & 0x000000FF;
+	USART_transmit(buff);
+	buff = (n >> 8) & 0x000000FF;
+	USART_transmit(buff);
+	buff = n & 0x000000FF;   // LSB
+	USART_transmit(buff);
+}
+
+void write(int8_t n) {
+	USART_transmit(n);
+}
+
+void write(int16_t n) {
+	uint8_t buff;
+	buff = (n >> 8) & 0x00FF; // MSB
+	USART_transmit(buff);
+	buff = n & 0x00FF;
+	USART_transmit(buff);
+}
+
+void write(int32_t n) {
+	uint8_t buff;
+	buff = (n >> 24) & 0x000000FF; // MSB
+	USART_transmit(buff);
+	buff = (n >> 16) & 0x000000FF;
+	USART_transmit(buff);
+	buff = (n >> 8) & 0x000000FF;
+	USART_transmit(buff);
+	buff = n & 0x000000FF;   // LSB
+	USART_transmit(buff);
+}
+
+uint16_t strlen(const char *s) {
+	char const * const start = s;
+	while (*s != 0) {
+		++s;
+	}
+	return s - start;
 }
 
